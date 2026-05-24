@@ -15,6 +15,7 @@ dev = [
     "pytest-asyncio>=0.23",
     "ruff>=0.14",
     "mypy>=1.11",
+    "types-PyYAML>=6.0",
 ]
 
 [tool.ruff]
@@ -55,6 +56,18 @@ files = [
 warn_unused_ignores = true
 no_implicit_optional = true
 check_untyped_defs = true
+
+# Lazy-imported optional deps (QwenTTSBackend imports inside __init__ so the
+# rest of voice.engine stays importable without torch / qwen-tts installed).
+[[tool.mypy.overrides]]
+module = [
+    "torch",
+    "torch.*",
+    "qwen_tts",
+    "qwen_tts.*",
+    "soundfile",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = [

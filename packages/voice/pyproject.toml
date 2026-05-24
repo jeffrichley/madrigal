@@ -4,7 +4,9 @@ dynamic = ["version"]
 description = "Pluggable TTS engine library with content-addressed cache, parallel generation, named voice registry, and mode-aware delivery for streaming and batch consumers."
 license = "MIT"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "PyYAML>=6.0",
+]
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
