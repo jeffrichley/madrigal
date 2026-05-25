@@ -75,73 +75,79 @@ class TestUC1ExplicitBatch:
         assert result.audio is None
 
 
-class TestUC1WithCache:
-    """list-input + parallel=True + cache=True: partition + reassemble."""
+class TestUC1CacheAndParallelMutuallyExclusive:
+    """Spec §5 conditional path (active after 2026-05-25 empirical test).
 
-    def test_first_call_all_miss(self, backend: FakeTTSBackend, tmp_path: Path) -> None:
-        cache = Cache(root=tmp_path / "cache")
-        result = generate(
-            ["a", "b", "c"],
-            Spec(voice_id="pepper", parallel=True, cache=True),
-            backend=backend,
-            cache=cache,
-        )
-        assert result.cache_hit is False  # any() of zero hits = False
-        assert result.cache_fully_hit is False
-        assert result.manifest is not None
-        assert len(result.manifest) == 3
-        assert all(m["cache_hit"] is False for m in result.manifest)
-        assert all(m["cache_key"] is not None for m in result.manifest)
+    Qwen3-TTS native batching is item-coupled; per-item cache + batch
+    synthesis cannot safely compose. UC1 (declarative list-input) raises
+    ValueError; consumer picks which flag to drop.
+    """
 
-    def test_second_call_all_hit(self, backend: FakeTTSBackend, tmp_path: Path) -> None:
-        cache = Cache(root=tmp_path / "cache")
-        spec = Spec(voice_id="pepper", parallel=True, cache=True)
-        _ = generate(["a", "b", "c"], spec, backend=backend, cache=cache)
-        r2 = generate(["a", "b", "c"], spec, backend=backend, cache=cache)
-        assert r2.cache_hit is True  # any
-        assert r2.cache_fully_hit is True  # all
-        assert r2.manifest is not None
-        assert all(m["cache_hit"] is True for m in r2.manifest)
-
-    def test_mixed_partition_preserves_order(
+    def test_cache_and_parallel_raises(
         self, backend: FakeTTSBackend, tmp_path: Path
     ) -> None:
-        """SILENT-SHUFFLE CATCHER. The load-bearing test.
-
-        Prime cache with "a" and "c"; call with ["a", "b", "c"]. Orchestrator
-        must partition [b] as miss, synthesize via backend.synthesize_batch,
-        and reassemble [cached_a, new_b, cached_c] in input order.
-        """
         cache = Cache(root=tmp_path / "cache")
-        spec = Spec(voice_id="pepper", parallel=True, cache=True)
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            generate(
+                ["a", "b", "c"],
+                Spec(voice_id="pepper", parallel=True, cache=True),
+                backend=backend,
+                cache=cache,
+            )
 
-        # Prime with a + c.
-        _ = generate(["a"], spec, backend=backend, cache=cache)
-        _ = generate(["c"], spec, backend=backend, cache=cache)
+    def test_error_message_names_alternatives(
+        self, backend: FakeTTSBackend, tmp_path: Path
+    ) -> None:
+        """Useful error: tells consumer which flag to drop + why."""
+        cache = Cache(root=tmp_path / "cache")
+        with pytest.raises(ValueError) as exc:
+            generate(
+                ["a"],
+                Spec(voice_id="pepper", parallel=True, cache=True),
+                backend=backend,
+                cache=cache,
+            )
+        msg = str(exc.value)
+        assert "cache=True" in msg
+        assert "parallel=True" in msg
+        assert "item-coupled" in msg
 
-        # Call with [a, b, c]: a + c hit; b miss + synthesized.
-        result = generate(["a", "b", "c"], spec, backend=backend, cache=cache)
-
-        # Verify input-order reassembly: each audio at index i matches direct
-        # synthesis of texts[i].
-        expected_a, _ = backend.synthesize("pepper", "a", 42)
-        expected_b, _ = backend.synthesize("pepper", "b", 42)
-        expected_c, _ = backend.synthesize("pepper", "c", 42)
-
+    def test_parallel_only_works(self, backend: FakeTTSBackend) -> None:
+        """parallel=True alone (cache=False): batch path active, no raise."""
+        result = generate(
+            ["a", "b", "c"],
+            Spec(voice_id="pepper", parallel=True, cache=False),
+            backend=backend,
+        )
+        assert result.parallel_used is True
         assert result.audios is not None
-        assert result.audios[0] == expected_a
-        assert result.audios[1] == expected_b
-        assert result.audios[2] == expected_c
+        assert len(result.audios) == 3
 
-        # cache_hit any() True (a+c hit); cache_fully_hit all() False (b missed).
-        assert result.cache_hit is True
-        assert result.cache_fully_hit is False
+    def test_cache_only_with_list_raises(self, backend: FakeTTSBackend, tmp_path: Path) -> None:
+        """cache=True alone with list-input still raises (list requires parallel)."""
+        cache = Cache(root=tmp_path / "cache")
+        # list input requires parallel=True; with parallel=False, raises
+        # different error (list-without-parallel).
+        with pytest.raises(ValueError, match="list input requires"):
+            generate(
+                ["a"],
+                Spec(voice_id="pepper", parallel=False, cache=True),
+                backend=backend,
+                cache=cache,
+            )
 
-        # Manifest reflects per-item hit status.
-        assert result.manifest is not None
-        assert result.manifest[0]["cache_hit"] is True
-        assert result.manifest[1]["cache_hit"] is False
-        assert result.manifest[2]["cache_hit"] is True
+    def test_silent_shuffle_catcher_still_works_without_cache(
+        self, backend: FakeTTSBackend
+    ) -> None:
+        """Input-order preservation still verified for parallel-only path."""
+        result = generate(
+            ["alpha", "beta", "gamma"],
+            Spec(voice_id="pepper", parallel=True, cache=False),
+            backend=backend,
+        )
+        assert result.audios is not None
+        seq = [backend.synthesize("pepper", t, 42) for t in ["alpha", "beta", "gamma"]]
+        assert result.audios == [s[0] for s in seq]
 
 
 # ---------------------------------------------------------------------------
@@ -203,10 +209,18 @@ class TestUC2ChunkedParallel:
         assert out.read_bytes() == result.audio
 
 
-class TestUC2WithCache:
-    """UC2 + cache=True: same partition logic applied to chunks."""
+class TestUC2CacheAndParallelSilentFallback:
+    """Spec §5 conditional path for UC2 (active after 2026-05-25 empirical test).
 
-    def test_first_call_all_miss(self, backend: FakeTTSBackend, tmp_path: Path) -> None:
+    UC2 (str + chunking + parallel + cache) silently falls back to v0
+    sequential cache+chunking path. Result.parallel_used=False signals
+    the fallback fired. Audio is correct (per-chunk cache hits work
+    because each chunk is synthesized alone, not in a batch).
+    """
+
+    def test_silent_fallback_sets_parallel_used_false(
+        self, backend: FakeTTSBackend, tmp_path: Path
+    ) -> None:
         cache = Cache(root=tmp_path / "cache")
         result = generate(
             "First. Second.",
@@ -214,25 +228,52 @@ class TestUC2WithCache:
             backend=backend,
             cache=cache,
         )
-        assert result.cache_hit is False
-        assert result.cache_fully_hit is False
+        # parallel was requested but fell back to sequential.
+        assert result.parallel_used is False
+        # Audio still produced correctly.
+        assert isinstance(result.audio, bytes)
+        # Cache populated normally (per-chunk).
         assert result.manifest is not None
-        assert len(result.manifest) == 2
-        assert all(m["cache_hit"] is False for m in result.manifest)
+        assert all(m["cache_key"] is not None for m in result.manifest)
 
-    def test_second_call_all_hit_yields_same_audio(
+    def test_second_call_all_hit_in_fallback_path(
         self, backend: FakeTTSBackend, tmp_path: Path
     ) -> None:
+        """Cache works in fallback path; second call gets per-chunk hits."""
         cache = Cache(root=tmp_path / "cache")
         spec = Spec(
             voice_id="pepper", chunk_strategy="sentence", parallel=True, cache=True
         )
         r1 = generate("First. Second.", spec, backend=backend, cache=cache)
         r2 = generate("First. Second.", spec, backend=backend, cache=cache)
-        assert r2.cache_hit is True
         assert r2.cache_fully_hit is True
-        # Same audio on cache hit.
         assert r2.audio == r1.audio
+        # parallel_used False on both runs (fallback active).
+        assert r1.parallel_used is False
+        assert r2.parallel_used is False
+
+    def test_uc2_parallel_only_works(self, backend: FakeTTSBackend) -> None:
+        """parallel=True alone (no cache): batch path active, parallel_used True."""
+        result = generate(
+            "First. Second.",
+            Spec(voice_id="pepper", chunk_strategy="sentence", parallel=True, cache=False),
+            backend=backend,
+        )
+        assert result.parallel_used is True
+        assert result.audio is not None
+
+    def test_uc2_cache_only_works(self, backend: FakeTTSBackend, tmp_path: Path) -> None:
+        """cache=True alone (no parallel): sequential cache+chunking, parallel_used False."""
+        cache = Cache(root=tmp_path / "cache")
+        result = generate(
+            "First. Second.",
+            Spec(voice_id="pepper", chunk_strategy="sentence", parallel=False, cache=True),
+            backend=backend,
+            cache=cache,
+        )
+        assert result.parallel_used is False
+        assert result.manifest is not None
+        assert len(result.manifest) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -269,13 +310,10 @@ class TestMaxBatchSize:
             expected, _ = backend.synthesize("pepper", t, 42)
             assert result.audios[i] == expected
 
-    def test_slicing_with_cache(self, backend: FakeTTSBackend, tmp_path: Path) -> None:
-        """Sub-batching + cache: partition still correct."""
+    def test_slicing_with_cache_raises(self, backend: FakeTTSBackend, tmp_path: Path) -> None:
+        """Sub-batching + cache + parallel: still raises per §5 (cache+parallel mutually exclusive)."""
         cache = Cache(root=tmp_path / "cache")
         spec = Spec(voice_id="pepper", parallel=True, cache=True, max_batch_size=2)
         texts = ["a", "b", "c", "d", "e"]
-        _ = generate(texts, spec, backend=backend, cache=cache)
-        # Second call: all hit.
-        r2 = generate(texts, spec, backend=backend, cache=cache)
-        assert r2.cache_fully_hit is True
-        assert r2.audios is not None and len(r2.audios) == 5
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            generate(texts, spec, backend=backend, cache=cache)

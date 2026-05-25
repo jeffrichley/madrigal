@@ -175,10 +175,14 @@ class QwenTTSBackend:
             if self._torch.cuda.is_available():
                 self._torch.cuda.manual_seed_all(seed)
 
+            # `prompt` is a 1-element list[VoiceClonePromptItem] returned by
+            # create_voice_clone_prompt. For batch mode we need
+            # list[VoiceClonePromptItem] of length N (same voice for each item).
+            # List multiplication: 1-element list * N = N references to the item.
             wavs, sample_rate = self._model.generate_voice_clone(
                 text=texts,
                 language="english",
-                voice_clone_prompt=[prompt] * len(texts),
+                voice_clone_prompt=prompt * len(texts),
             )
         except RuntimeError as exc:
             if "out of memory" in str(exc).lower():

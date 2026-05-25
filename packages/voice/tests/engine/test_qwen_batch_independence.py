@@ -9,13 +9,19 @@ Per parallel-gen-design.md §7.1 + §0 preamble:
 - This test MUST run + pass on real Qwen3-TTS before v0.1 is declared done.
 - Tagged `@pytest.mark.real_engine`; skipped without VOICE_REAL_ENGINE_OK=1.
 - Done-gate convention: declaring v0.1 done requires VOICE_REAL_ENGINE_OK=1
-  on the validation run that collects + passes this test. The done-gate is
-  procedural (developer discipline + PR brief asserts it), not enforced by
-  tooling.
+  on the validation run that collects + passes this test.
 
-If this test FAILS (engine batching is item-coupled), v0.1 must be amended
-to add the cache+parallel mutually-exclusive raise per spec §5 before
-declaring done.
+**Empirical result captured 2026-05-25 (Wren, Jeff's workstation):**
+Qwen3-TTS native batching is ITEM-COUPLED. Same text produces different
+audio when batched with different other texts. v0.1 ships with the
+spec §5 fallback active: cache + parallel mutually exclusive for UC1
+(ValueError); silent fallback to v0 sequential cache+chunking for UC2
+(Result.parallel_used=False signals the fallback).
+
+This test records the result + verifies the orchestrator's behavior
+matches. Either way (item-independent OR item-coupled) passes. The
+test's PURPOSE is to keep the empirical evidence in the test suite —
+re-run on engine upgrades to catch behavior changes.
 
 Required env vars when VOICE_REAL_ENGINE_OK=1:
 - VOICE_TEST_MODEL_PATH: filesystem path to Qwen3-TTS model
@@ -46,11 +52,12 @@ def test_batch_item_independence_empirical() -> None:
     """Does `synthesize_batch(["a", "b"], seed=42)` produce same audio for "a"
     as `synthesize_batch(["a"], seed=42)` does?
 
-    If YES (item-independent): cache + parallel compose freely; standard
-        path active; spec §3 + §4 unchanged.
-    If NO (item-coupled): cache + parallel must be mutually exclusive on
-        this backend; spec §5 fallback active; orchestrator must raise
-        ValueError when both flags are set.
+    Result is RECORDED here for audit. Test passes regardless of outcome;
+    the orchestrator's §5 fallback path matches the recorded result.
+
+    Re-run this test if Qwen3-TTS is upgraded or replaced — behavior change
+    may warrant lifting the §5 fallback (item-independent) or keeping it
+    (item-coupled).
     """
     from voice.engine import QwenTTSBackend
 
@@ -74,15 +81,35 @@ def test_batch_item_independence_empirical() -> None:
         "pepper", ["Hello, world.", "Second item, different text."], seed=42
     )
 
-    if alone_audios[0] != in_batch_audios[0]:
-        pytest.fail(
-            "ITEM-COUPLED engine batching detected. v0.1 cache + parallel "
-            "must be mutually exclusive on this backend; the orchestrator "
-            "MUST raise ValueError when both flags are set. "
-            "Spec §5 fallback path is active. "
-            "Implementer: add the raise + remove the cache+parallel test "
-            "path expectations; update the brief to Jeff naming the empirical "
-            "result + the conditional-fallback being live."
+    is_item_independent = alone_audios[0] == in_batch_audios[0]
+
+    if is_item_independent:
+        # Engine behavior unexpectedly improved (or never had coupling on this
+        # config). The §5 fallback in voice.generate is overly conservative —
+        # could be lifted. File an issue.
+        print(
+            "\nEMPIRICAL RESULT: ITEM-INDEPENDENT. "
+            "Spec §5 fallback is overly conservative for this backend; "
+            "consider lifting the cache+parallel mutual-exclusion in "
+            "voice.generate. Re-validate orchestrator behavior."
         )
-    # Else: item-independent. Cache + parallel compose freely. Standard path
-    # active. v0.1 ships as designed.
+    else:
+        # The recorded 2026-05-25 result. Confirms §5 fallback is correct.
+        print(
+            "\nEMPIRICAL RESULT: ITEM-COUPLED. "
+            "Spec §5 fallback active in voice.generate (cache+parallel "
+            "mutually exclusive). Confirmed correct."
+        )
+
+    # Verify orchestrator behavior matches the recorded result.
+    if not is_item_independent:
+        from voice import Cache, Spec, generate
+
+        cache = Cache(root=Path(os.environ.get("TMP", "/tmp")) / "voice-empirical-cache")
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            generate(
+                ["x"],
+                Spec(voice_id="pepper", parallel=True, cache=True),
+                backend=backend,
+                cache=cache,
+            )

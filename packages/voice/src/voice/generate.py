@@ -78,13 +78,37 @@ def generate(
             "For sequential per-text synthesis, call generate() once per text."
         )
 
-    # 4. Voice resolution (Registry is optional but useful for diagnostics).
+    # 4. Spec §5 conditional path — cache + parallel handling.
+    # The empirical test (2026-05-25) revealed Qwen3-TTS's
+    # `generate_voice_clone` native batching is ITEM-COUPLED: an item's
+    # output depends on the other items in the batch. Per-item cache
+    # entries from one batch would be stale when reused in a different
+    # batch. v0.1 enforces mutual exclusion:
+    # - UC1 (list-input + cache=True): raise ValueError; consumer drops a flag.
+    # - UC2 (str + chunking + cache=True): silent fallback to v0 sequential
+    #   cache+chunking; Result.parallel_used=False signals the fallback fired.
+    if spec.cache and spec.parallel:
+        if isinstance(text, list):
+            # UC1: declarative list-input. Raise so consumer picks one flag.
+            raise ValueError(
+                "spec.cache=True AND spec.parallel=True are mutually exclusive "
+                "on this backend (Qwen3-TTS native batching is item-coupled per "
+                "the 2026-05-25 empirical test; per-item cache hits would return "
+                "stale audio). Drop one flag: cache=True for repeated identical "
+                "texts; parallel=True for fresh batch synthesis without cache. "
+                "See voice-parallel-gen-design.md §5."
+            )
+        # UC2: str + chunking. Silent fallback to v0 sequential cache+chunking.
+        # parallel_used=False on the Result so consumer knows parallel didn't fire.
+        # Fall through to the v0 sequential path below.
+
+    # 5. Voice resolution (Registry is optional but useful for diagnostics).
     if registry is not None:
         registry.get(spec.voice_id)
 
-    # 5. Route to appropriate path.
+    # 6. Route to appropriate path.
     if isinstance(text, list):
-        # UC1: explicit batch.
+        # UC1: explicit batch (cache is False, guaranteed by §5 check above).
         return _generate_uc1_batch(
             texts=text,
             spec=spec,
@@ -93,8 +117,9 @@ def generate(
             model_id=model_id,
         )
 
-    # text is str. If parallel + chunking, UC2; else v0 single-text path.
-    if spec.parallel and spec.chunk_strategy != "none":
+    # text is str. If parallel + chunking (and NOT cache, per §5), UC2;
+    # else v0 single-text path.
+    if spec.parallel and spec.chunk_strategy != "none" and not spec.cache:
         return _generate_uc2_chunked_parallel(
             text=text,
             spec=spec,
@@ -103,8 +128,8 @@ def generate(
             model_id=model_id,
         )
 
-    # v0 path (preserved): str input, no parallel (or parallel + no chunking
-    # which degenerates to one-chunk batch — same as single-text path).
+    # v0 path (preserved): str input, no parallel-batch-eligible (sequential
+    # cache+chunking falls here too per §5 silent fallback).
     return _generate_v0_sequential(
         text=text,
         spec=spec,
