@@ -13,9 +13,13 @@ doc. Closes [#10](https://github.com/jeffrichley/voice/issues/10).
   --all-packages`), quality gate (`just check`), autofix (`just fix`),
   conventional commits (with allowed types + uppercase rule), branch
   naming, where design docs and plans live, and the pre-push hook.
-- Install command matches what CI runs in `.github/workflows/ci.yml`
-  (`uv sync --all-packages`), so a contributor following the doc gets the
-  same environment as CI.
+- Install command is `uv sync --all-packages` (intentionally without the
+  `--locked` flag that CI uses at `.github/workflows/ci.yml:34` —
+  `uv sync --locked --all-packages`). The doc deliberately omits
+  `--locked` so a first-time contributor's setup updates the lockfile if
+  it has drifted rather than hard-failing; CI keeps `--locked` to enforce
+  lockfile reproducibility. The doc should note this divergence so a
+  contributor understands why their local command differs from CI.
 - Conventional-commit section lists every type allowed by
   `.github/workflows/pr-title-lint.yml` (feat, fix, chore, docs, refactor,
   test, style, build, ci, perf, revert) and the lowercase-subject rule.
@@ -38,10 +42,15 @@ commands, no marketing copy.
 Source the content from files already in the repo so it stays in sync:
 
 - **Install + quality gate + autofix:** copy command shape from `justfile`
-  (`check: lint typecheck test`, `fix` recipe) and CI (`uv sync
-  --all-packages` in `.github/workflows/ci.yml:34`). Use `--all-packages`
-  rather than the bare `uv sync` mentioned in `CLAUDE.md` because CI uses
-  the `--all-packages` form and the issue explicitly specifies it.
+  (`check: lint typecheck test`, `fix` recipe). Recommend
+  `uv sync --all-packages` — the issue explicitly specifies the
+  `--all-packages` form, and it matches the project shape CI installs
+  (CI's actual command at `.github/workflows/ci.yml:34` is
+  `uv sync --locked --all-packages`). Intentionally drop `--locked` for
+  the contributor-facing doc: a first-time setup hitting lockfile drift
+  should update the lockfile, not hard-fail; CI keeps `--locked` to
+  enforce lockfile reproducibility. Call out this divergence in the doc
+  so a contributor isn't surprised when CI uses a different flag set.
 - **Conventional commits:** mirror the allowed-types list and lowercase-
   subject rule from `.github/workflows/pr-title-lint.yml:22-37` and
   `CLAUDE.md` "Conventions" section. Don't restate WHY — link to the
@@ -76,7 +85,7 @@ sites only if useful. No emojis (repo style).
 ## File-level changes
 | Path | Change | Description |
 | --- | --- | --- |
-| `CONTRIBUTING.md` | CREATE | New file at repo root. Sections (in order): (1) intro — one sentence pointing at `README.md` for what madrigal is and `AGENTS.md` for agent conventions; (2) Install — `uv sync --all-packages`; (3) Quality gate — `just check` with one-line note on what it runs; (4) Autofix — `just fix`; (5) Commit conventions — allowed types list, lowercase-subject rule, link to `pr-title-lint.yml`; (6) Branch naming — `<type>/<kebab-description>` pattern with 2-3 examples from recent history; (7) Where docs live — `docs/superpowers/specs/` for design specs, `docs/superpowers/plans/` for implementation plans; (8) Pre-push gate — activation command (`git config core.hooksPath .githooks`), what it runs (`just check`), and the `--no-verify` bypass note. ~50 lines total. |
+| `CONTRIBUTING.md` | CREATE | New file at repo root. Sections (in order): (1) intro — one sentence pointing at `README.md` for what madrigal is and `AGENTS.md` for agent conventions; (2) Install — `uv sync --all-packages` plus a one-line note that CI runs `uv sync --locked --all-packages` and the doc intentionally omits `--locked` so first-time setup updates the lockfile on drift instead of hard-failing; (3) Quality gate — `just check` with one-line note on what it runs; (4) Autofix — `just fix`; (5) Commit conventions — allowed types list, lowercase-subject rule, link to `pr-title-lint.yml`; (6) Branch naming — `<type>/<kebab-description>` pattern with 2-3 examples from recent history; (7) Where docs live — `docs/superpowers/specs/` for design specs, `docs/superpowers/plans/` for implementation plans; (8) Pre-push gate — activation command (`git config core.hooksPath .githooks`), what it runs (`just check`), and the `--no-verify` bypass note. ~50 lines total. |
 
 No other files change. No edits to `README.md`, `CLAUDE.md`, `AGENTS.md`,
 `justfile`, or any workflow.
