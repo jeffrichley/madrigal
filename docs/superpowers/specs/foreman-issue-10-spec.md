@@ -44,13 +44,14 @@ Source the content from files already in the repo so it stays in sync:
 - **Install + quality gate + autofix:** copy command shape from `justfile`
   (`check: lint typecheck test`, `fix` recipe). Recommend
   `uv sync --all-packages` — the issue explicitly specifies the
-  `--all-packages` form, and it matches the project shape CI installs
-  (CI's actual command at `.github/workflows/ci.yml:34` is
-  `uv sync --locked --all-packages`). Intentionally drop `--locked` for
-  the contributor-facing doc: a first-time setup hitting lockfile drift
-  should update the lockfile, not hard-fail; CI keeps `--locked` to
-  enforce lockfile reproducibility. Call out this divergence in the doc
-  so a contributor isn't surprised when CI uses a different flag set.
+  `--all-packages` form. Note that this command does NOT match what CI
+  runs: CI's actual command at `.github/workflows/ci.yml:34` is
+  `uv sync --locked --all-packages` (with `--locked`). The doc
+  intentionally drops `--locked` for the contributor-facing flow because
+  a first-time setup hitting lockfile drift should update the lockfile,
+  not hard-fail; CI adds `--locked` to enforce lockfile reproducibility.
+  Call out this divergence in the doc so a contributor understands why
+  their local command differs from CI.
 - **Conventional commits:** mirror the allowed-types list and lowercase-
   subject rule from `.github/workflows/pr-title-lint.yml:22-37` and
   `CLAUDE.md` "Conventions" section. Don't restate WHY — link to the
