@@ -48,6 +48,10 @@ class VoiceNotPreparedError(VoiceError):
     """
 
 
+class WavDecodingError(VoiceError):
+    """WAV bytes returned by a backend (or passed to a wav helper) could not be decoded. ``__cause__`` is the underlying ``wave.Error``."""
+
+
 @dataclass(frozen=True)
 class VoiceInfo:
     """One configured voice in the registry.
@@ -116,4 +120,5 @@ __all__ = [
     "VoiceError",
     "VoiceInfo",
     "VoiceNotPreparedError",
+    "WavDecodingError",
 ]

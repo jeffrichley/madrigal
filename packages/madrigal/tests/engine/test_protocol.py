@@ -14,6 +14,7 @@ from madrigal.engine import (
     VoiceError,
     VoiceInfo,
     VoiceNotPreparedError,
+    WavDecodingError,
 )
 
 
@@ -23,6 +24,7 @@ def test_error_taxonomy_descends_from_voice_error() -> None:
     assert issubclass(TextTooLongError, VoiceError)
     assert issubclass(GPUOOMError, VoiceError)
     assert issubclass(VoiceNotPreparedError, VoiceError)
+    assert issubclass(WavDecodingError, VoiceError)
     assert issubclass(VoiceError, Exception)
 
 

@@ -14,19 +14,35 @@ from __future__ import annotations
 import wave
 from io import BytesIO
 
+from madrigal.engine.protocol import WavDecodingError
+
 
 def wav_sample_rate_hz(audio: bytes) -> int:
-    """Read the sample rate from a WAV blob. Raises if not parseable."""
-    with wave.open(BytesIO(audio), "rb") as w:
-        return w.getframerate()
+    """Read the sample rate from a WAV blob.
+
+    Raises ``WavDecodingError`` if the bytes don't parse as WAV
+    (``__cause__`` is the underlying ``wave.Error``).
+    """
+    try:
+        with wave.open(BytesIO(audio), "rb") as w:
+            return w.getframerate()
+    except wave.Error as exc:
+        raise WavDecodingError("failed to decode WAV bytes for sample-rate read") from exc
 
 
 def wav_duration_ms(audio: bytes) -> int:
-    """Return duration in milliseconds. Raises if not parseable."""
-    with wave.open(BytesIO(audio), "rb") as w:
-        n_frames = w.getnframes()
-        rate = w.getframerate()
-        return int(n_frames * 1000 / rate) if rate else 0
+    """Return duration in milliseconds.
+
+    Raises ``WavDecodingError`` if the bytes don't parse as WAV
+    (``__cause__`` is the underlying ``wave.Error``).
+    """
+    try:
+        with wave.open(BytesIO(audio), "rb") as w:
+            n_frames = w.getnframes()
+            rate = w.getframerate()
+            return int(n_frames * 1000 / rate) if rate else 0
+    except wave.Error as exc:
+        raise WavDecodingError("failed to decode WAV bytes for duration read") from exc
 
 
 def concat_wavs(wavs: list[bytes]) -> bytes:
@@ -34,7 +50,11 @@ def concat_wavs(wavs: list[bytes]) -> bytes:
 
     Empty input returns ``b""``. Single-element input returns the input
     unchanged. Raises ``ValueError`` if the WAVs have mismatched format
-    (channels / sample-width / sample-rate).
+    (channels / sample-width / sample-rate) — that's a caller
+    precondition violation, not a decode failure. Raises
+    ``WavDecodingError`` if any input blob doesn't parse as WAV, or if
+    writing the concatenated output fails to encode as WAV
+    (``__cause__`` is the underlying ``wave.Error``).
     """
     if not wavs:
         return b""
@@ -46,34 +66,37 @@ def concat_wavs(wavs: list[bytes]) -> bytes:
     first_rate: int | None = None
     all_frames = bytearray()
 
-    for blob in wavs:
-        with wave.open(BytesIO(blob), "rb") as w:
-            channels = w.getnchannels()
-            sampwidth = w.getsampwidth()
-            rate = w.getframerate()
-            frames = w.readframes(w.getnframes())
+    try:
+        for blob in wavs:
+            with wave.open(BytesIO(blob), "rb") as w:
+                channels = w.getnchannels()
+                sampwidth = w.getsampwidth()
+                rate = w.getframerate()
+                frames = w.readframes(w.getnframes())
 
-        if first_channels is None:
-            first_channels = channels
-            first_sampwidth = sampwidth
-            first_rate = rate
-        elif (channels, sampwidth, rate) != (first_channels, first_sampwidth, first_rate):
-            raise ValueError(
-                f"cannot concatenate WAVs with different format: "
-                f"first was (channels={first_channels}, sampwidth={first_sampwidth}, "
-                f"rate={first_rate}); got (channels={channels}, sampwidth={sampwidth}, "
-                f"rate={rate})"
-            )
-        all_frames.extend(frames)
+            if first_channels is None:
+                first_channels = channels
+                first_sampwidth = sampwidth
+                first_rate = rate
+            elif (channels, sampwidth, rate) != (first_channels, first_sampwidth, first_rate):
+                raise ValueError(
+                    f"cannot concatenate WAVs with different format: "
+                    f"first was (channels={first_channels}, sampwidth={first_sampwidth}, "
+                    f"rate={first_rate}); got (channels={channels}, sampwidth={sampwidth}, "
+                    f"rate={rate})"
+                )
+            all_frames.extend(frames)
 
-    assert first_channels is not None  # for mypy; loop guarantees not-None
-    assert first_sampwidth is not None
-    assert first_rate is not None
+        assert first_channels is not None  # for mypy; loop guarantees not-None
+        assert first_sampwidth is not None
+        assert first_rate is not None
 
-    buf = BytesIO()
-    with wave.open(buf, "wb") as out:
-        out.setnchannels(first_channels)
-        out.setsampwidth(first_sampwidth)
-        out.setframerate(first_rate)
-        out.writeframes(bytes(all_frames))
-    return buf.getvalue()
+        buf = BytesIO()
+        with wave.open(buf, "wb") as out:
+            out.setnchannels(first_channels)
+            out.setsampwidth(first_sampwidth)
+            out.setframerate(first_rate)
+            out.writeframes(bytes(all_frames))
+        return buf.getvalue()
+    except wave.Error as exc:
+        raise WavDecodingError("failed to decode WAV bytes during concatenation") from exc

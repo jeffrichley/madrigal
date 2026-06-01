@@ -26,6 +26,7 @@ from madrigal.engine.protocol import (
     VoiceError,
     VoiceInfo,
     VoiceNotPreparedError,
+    WavDecodingError,
 )
 from madrigal.engine.qwen import QwenTTSBackend
 
@@ -39,4 +40,5 @@ __all__ = [
     "VoiceError",
     "VoiceInfo",
     "VoiceNotPreparedError",
+    "WavDecodingError",
 ]
