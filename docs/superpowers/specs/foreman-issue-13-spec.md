@@ -24,8 +24,8 @@ For issue #13.
   `torch`/`qwen_tts`, and stored as `self._sf`.
 - The module docstring's lazy-import sentence is updated to mention `soundfile`
   alongside `torch` and `qwen_tts`.
-- Three short inline comments are added at the three control-flow points listed
-  in the Approach section.
+- Three short inline comments are added at the three control-flow points shown
+  in the sub-request code examples (sub-requests 3 and 6).
 - `just check` passes (ruff + mypy + pytest green). No test additions required.
 - Public API is unchanged: no renames, no signature changes, no behavior differences.
 
@@ -92,8 +92,8 @@ can be condensed into short inline notes at the right callsites:
    `# list-multiply: broadcast the 1-element prompt to N copies for batch mode`
 2. **At `per_item_s = total_s / len(texts)` in `synthesize_batch()`**:
    `# approximation: the engine returns only total wall-time, not per-item`
-3. **At `if "out of memory" in str(exc).lower()` in `_invoke_model()`**:
-   `# Qwen3-TTS raises RuntimeError (not a typed subclass) for GPU OOM`
+3. **Inside the `try` block in `_invoke_model()`, above the `generate_voice_clone` call**:
+   `# Qwen3-TTS raises RuntimeError (not a typed subclass) for GPU OOM.`
 
 ## Sub-requests (topologically sorted)
 
