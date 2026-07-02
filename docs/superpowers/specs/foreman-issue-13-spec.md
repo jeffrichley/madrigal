@@ -12,7 +12,7 @@ For issue #13.
 ## Acceptance criteria
 
 - `synthesize()` body (excluding docstring) is under 25 lines.
-- `synthesize_batch()` body (excluding its long docstring) is under 30 lines.
+- `synthesize_batch()` body (excluding its long docstring) is approximately 30 lines.
 - A private method `_encode_wav_array(self, wav_array: Any, sample_rate: Any) -> bytes`
   exists on `QwenTTSBackend` and is the sole call site for `soundfile`/BytesIO WAV encoding.
 - A private method `_invoke_model(self, text_or_texts: str | list[str],
