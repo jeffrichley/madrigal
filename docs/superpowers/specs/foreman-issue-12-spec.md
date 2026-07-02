@@ -292,8 +292,8 @@ Key editorial decisions (resolved by the Planner; the Worker must follow them):
    higher-level to lower-level modules; there are no cycles.
 
    - `__init__` → `generate`, `cache`, `registry`, `result`, `spec`
-   - `generate` → `_cache_key`, `_wav`, `cache/store`, `chunking`,
-     `engine/protocol`, `registry/tiered`, `result`, `spec`
+   - `generate` → `_cache_key`, `_wav`, `cache`, `chunking`,
+     `engine/protocol`, `registry`, `result`, `spec`
    - `_cache_key` → `spec`
    - `_wav` → `engine/protocol`
    - `cache/__init__` → `cache/store`
