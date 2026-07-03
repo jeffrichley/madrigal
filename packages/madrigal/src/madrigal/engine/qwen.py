@@ -85,6 +85,7 @@ class QwenTTSBackend:
         self._prompts: dict[str, Any] = {}
 
     def prepare_voice(self, voice_id: str, ref_wav: Path, ref_text: str) -> None:
+        """Build and cache a voice-clone prompt from a reference clip."""
         ref_wav = Path(ref_wav)
         if not ref_wav.exists():
             raise FileNotFoundError(f"ref_wav not found: {ref_wav}")
