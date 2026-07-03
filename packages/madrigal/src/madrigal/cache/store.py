@@ -69,6 +69,7 @@ class Cache:
 
     @property
     def root(self) -> Path:
+        """Absolute path to the cache root directory."""
         return self._root
 
     def get(self, cache_key: str) -> CacheEntry | None:

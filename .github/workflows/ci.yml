@@ -42,4 +42,9 @@ jobs:
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
+      # Patch-coverage gate: fail PRs whose changed lines drop below 80%
+      # covered. PRs only (push-to-main has no base to diff) and Linux only.
+      - name: diff-cover patch-level gate
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        run: uv run diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref }} --fail-under=80
       - run: uv cache prune --ci
