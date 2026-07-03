@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/jeffrichley/madrigal/compare/v0.2.0...v0.2.1) (2026-07-03)
+
+
+### Bug Fixes
+
+* **_wav:** catch wave.Error and re-raise as WavDecodingError ([#18](https://github.com/jeffrichley/madrigal/issues/18)) ([75f59e4](https://github.com/jeffrichley/madrigal/commit/75f59e4f19ae4d112056aae82d56f12abbb30b42))
+
 ## [0.2.0](https://github.com/jeffrichley/voice/compare/v0.1.0...v0.2.0) (2026-05-26)
 
 
