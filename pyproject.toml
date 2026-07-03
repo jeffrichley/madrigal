@@ -13,6 +13,7 @@ madrigal = { workspace = true }
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
     "ruff>=0.14",
     "mypy>=1.11",
     "types-PyYAML>=6.0",
@@ -74,7 +75,9 @@ testpaths = [
     "packages/madrigal/tests",
 ]
 asyncio_mode = "auto"
-addopts = "--import-mode=importlib"
+# Coverage is generated for Codecov (coverage.xml) but NOT gated on a floor —
+# no --cov-fail-under. Add a floor once the team agrees on a target.
+addopts = "--import-mode=importlib --cov=packages/madrigal/src --cov-report=term-missing --cov-report=xml"
 markers = [
     "real_engine: requires real Qwen3-TTS engine (torch + qwen-tts + GPU). Skipped without MADRIGAL_REAL_ENGINE_OK=1; required for done per the never-done-without-running rule (2026-05-24).",
 ]

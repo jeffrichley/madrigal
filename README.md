@@ -1,5 +1,15 @@
 # madrigal
 
+[![CI](https://github.com/jeffrichley/madrigal/actions/workflows/ci.yml/badge.svg)](https://github.com/jeffrichley/madrigal/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jeffrichley/madrigal/branch/main/graph/badge.svg)](https://codecov.io/gh/jeffrichley/madrigal)
+[![PyPI](https://img.shields.io/pypi/v/madrigal.svg)](https://pypi.org/project/madrigal/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org)
+[![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://renovatebot.com)
+[![built by agent beings](https://img.shields.io/badge/built%20by-agent%20beings%20%F0%9F%AA%B6-8A2BE2.svg)](#)
+
 Polyphonic TTS engine library — parallel voice synthesis, content-addressed cache, named voice registry, and mode-aware delivery for streaming and batch consumers.
 
 A madrigal is a Renaissance composition for multiple unaccompanied voices, sung in parallel — which is precisely what this library does. The orchestrator synthesizes chunks in parallel (`synthesize_batch`) under one shared voice prompt, then concatenates the result. The name self-documents the algorithm.
